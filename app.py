@@ -42,6 +42,109 @@ Answer correctly based on the pipeline data above. Provide actionable, concise O
 """.strip()
 
 
+def render_metric_card(title, value, subtitle, tone="neutral"):
+    st.markdown(
+        f"""
+<div class="metric-card metric-{tone}">
+    <div class="metric-title">{title}</div>
+    <div class="metric-value">{value}</div>
+    <div class="metric-subtitle">{subtitle}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_intro(eyebrow, title, description):
+    st.markdown(
+        f"""
+<div class="section-intro">
+    <div class="section-eyebrow">{eyebrow}</div>
+    <h2>{title}</h2>
+    <p>{description}</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_pipeline_brief(pipeline, score):
+    anomaly = pipeline["anomaly_detected"] if pipeline["anomaly_detected"] != "None" else "No active anomaly"
+    drift = "<br>".join(pipeline["schema_changes"]) if pipeline["schema_changes"] else "No schema drift detected"
+    st.markdown(
+        f"""
+<div class="detail-card">
+    <div class="detail-header">
+        <div>
+            <div class="detail-label">Selected Pipeline</div>
+            <h3>{pipeline["pipeline_name"]}</h3>
+        </div>
+        <div class="health-pill">Health {score}/100</div>
+    </div>
+    <div class="detail-grid">
+        <div>
+            <span>Tech Stack</span>
+            <strong>{pipeline["type"]}</strong>
+        </div>
+        <div>
+            <span>Flow</span>
+            <strong>{pipeline["source"]} → {pipeline["target"]}</strong>
+        </div>
+        <div>
+            <span>Anomaly</span>
+            <strong>{anomaly}</strong>
+        </div>
+        <div>
+            <span>Schema Notes</span>
+            <strong>{drift}</strong>
+        </div>
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def style_volume_chart(fig):
+    fig.update_layout(
+        height=360,
+        margin=dict(l=0, r=0, t=20, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FBFBFC",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            title_text="",
+        ),
+        xaxis=dict(title="", showgrid=False, tickangle=-20),
+        yaxis=dict(title="Rows", gridcolor="#E6E8EB", zeroline=False),
+    )
+    fig.update_traces(marker_line_width=0, hovertemplate="%{y:,}<extra>%{fullData.name}</extra>")
+
+
+def style_latency_chart(fig):
+    fig.update_layout(
+        height=360,
+        margin=dict(l=0, r=0, t=20, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FBFBFC",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            title_text="",
+        ),
+        xaxis=dict(title="", showgrid=False, tickangle=-20),
+        yaxis=dict(title="Minutes", gridcolor="#E6E8EB", zeroline=False),
+    )
+    fig.update_traces(line_width=3, marker_size=8)
+
+
 st.set_page_config(
     page_title="Intelligent Data Pipeline Monitor (OCI)",
     page_icon="☁️",
@@ -52,29 +155,372 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+    :root {
+        --oracle-red: #f80000;
+        --ink: #131722;
+        --muted: #5d6471;
+        --panel: rgba(255, 255, 255, 0.82);
+        --panel-strong: #ffffff;
+        --line: rgba(19, 23, 34, 0.08);
+        --shadow: 0 18px 45px rgba(17, 24, 39, 0.09);
+        --success: #138a52;
+        --warning: #bb6b00;
+        --critical: #d7261e;
+        --accent-sand: #fff4ec;
+    }
+
+    .stApp {
+        background:
+            radial-gradient(circle at top left, rgba(248, 0, 0, 0.08), transparent 28%),
+            radial-gradient(circle at 85% 10%, rgba(255, 184, 77, 0.10), transparent 22%),
+            linear-gradient(180deg, #fffdf9 0%, #f7f7f8 48%, #f2f4f7 100%);
+    }
+
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+
     .main-header {
-        text-align: center;
-        padding: 25px;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FAFAFA 100%);
-        border-radius: 12px;
-        margin-bottom: 25px;
-        border: 1px solid #E0E0E0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+        padding: 34px 34px 28px 34px;
+        border-radius: 28px;
+        margin-bottom: 18px;
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.97) 0%, rgba(250,250,251,0.94) 55%, rgba(255,244,236,0.92) 100%);
+        border: 1px solid rgba(255,255,255,0.7);
+        box-shadow: var(--shadow);
+    }
+
+    .main-header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(120deg, rgba(248,0,0,0.09), transparent 24%),
+            linear-gradient(0deg, transparent 0%, rgba(255,255,255,0.28) 100%);
+        pointer-events: none;
+    }
+
+    .hero-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 2.1fr 1fr;
+        gap: 24px;
+        align-items: start;
+    }
+
+    .hero-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--oracle-red);
+        margin-bottom: 14px;
+    }
+
+    .hero-title {
+        margin: 0;
+        color: var(--ink);
+        font-size: clamp(2rem, 3.2vw, 3.4rem);
+        line-height: 0.95;
+        letter-spacing: -0.04em;
+    }
+
+    .hero-subtitle {
+        margin: 14px 0 18px 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 1.02rem;
+        line-height: 1.6;
+    }
+
+    .hero-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(19, 23, 34, 0.04);
+        border: 1px solid rgba(19, 23, 34, 0.06);
+        color: var(--ink);
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    .hero-chip strong {
+        font-weight: 800;
+    }
+
+    .hero-panel {
+        background: rgba(19, 23, 34, 0.96);
+        color: white;
+        border-radius: 22px;
+        padding: 18px 20px;
+        box-shadow: 0 20px 40px rgba(19, 23, 34, 0.16);
+    }
+
+    .hero-panel-label {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        opacity: 0.72;
+        margin-bottom: 8px;
+    }
+
+    .hero-panel-value {
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        margin-bottom: 8px;
+    }
+
+    .hero-panel-copy {
+        color: rgba(255,255,255,0.78);
+        line-height: 1.5;
+        font-size: 0.92rem;
+    }
+
+    .status-band {
+        margin: 8px 0 22px 0;
+        padding: 14px 18px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.7);
+        border: 1px solid rgba(19,23,34,0.05);
+        backdrop-filter: blur(8px);
+    }
+
+    .status-band strong {
+        color: var(--ink);
+    }
+
+    .section-intro {
+        margin: 6px 0 14px 0;
+    }
+
+    .section-eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--oracle-red);
+        margin-bottom: 8px;
+    }
+
+    .section-intro h2 {
+        margin: 0 0 6px 0;
+        color: var(--ink);
+        font-size: 1.55rem;
+        letter-spacing: -0.03em;
+    }
+
+    .section-intro p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 760px;
+        line-height: 1.6;
+    }
+
+    .metric-card {
+        min-height: 132px;
+        padding: 18px 18px 16px 18px;
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,250,251,0.92));
+        border: 1px solid rgba(19,23,34,0.06);
+        box-shadow: 0 12px 32px rgba(17, 24, 39, 0.06);
+    }
+
+    .metric-title {
+        color: var(--muted);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 700;
+        margin-bottom: 16px;
+    }
+
+    .metric-value {
+        color: var(--ink);
+        font-size: 2rem;
+        line-height: 1;
+        letter-spacing: -0.05em;
+        font-weight: 800;
+        margin-bottom: 12px;
+    }
+
+    .metric-subtitle {
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.45;
+    }
+
+    .metric-success {
+        box-shadow: inset 0 0 0 1px rgba(19,138,82,0.08), 0 12px 32px rgba(17, 24, 39, 0.06);
+    }
+
+    .metric-warning {
+        box-shadow: inset 0 0 0 1px rgba(187,107,0,0.1), 0 12px 32px rgba(17, 24, 39, 0.06);
+    }
+
+    .metric-danger {
+        box-shadow: inset 0 0 0 1px rgba(215,38,30,0.12), 0 12px 32px rgba(17, 24, 39, 0.06);
+    }
+
+    .detail-card {
+        padding: 22px;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,249,251,0.94));
+        border: 1px solid rgba(19,23,34,0.06);
+        box-shadow: var(--shadow);
+        margin-bottom: 12px;
+    }
+
+    .detail-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 18px;
+    }
+
+    .detail-header h3 {
+        margin: 4px 0 0 0;
+        font-size: 1.5rem;
+        line-height: 1.05;
+        color: var(--ink);
+        letter-spacing: -0.03em;
+    }
+
+    .detail-label {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    .health-pill {
+        white-space: nowrap;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(248,0,0,0.08);
+        color: #a80b0b;
+        font-weight: 800;
+        font-size: 0.9rem;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .detail-grid div {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(19,23,34,0.03);
+        border: 1px solid rgba(19,23,34,0.05);
+    }
+
+    .detail-grid span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .detail-grid strong {
+        color: var(--ink);
+        line-height: 1.5;
+        font-size: 0.95rem;
+    }
+
+    .chart-shell {
+        padding: 16px 18px 8px 18px;
+        border-radius: 24px;
+        background: rgba(255,255,255,0.82);
+        border: 1px solid rgba(19,23,34,0.06);
+        box-shadow: 0 16px 36px rgba(17, 24, 39, 0.05);
+        backdrop-filter: blur(8px);
+    }
+
+    .chart-title {
+        margin: 0 0 2px 0;
+        color: var(--ink);
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    .chart-copy {
+        margin: 0 0 12px 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: rgba(255,255,255,0.72);
+        padding: 8px;
+        border-radius: 18px;
+        border: 1px solid rgba(19,23,34,0.05);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        height: 48px;
+        border-radius: 14px;
+        padding: 0 16px;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 700;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, rgba(248,0,0,0.1), rgba(255,244,236,0.95));
+        color: var(--ink);
+    }
+
+    .st-emotion-cache-16txtl3,
+    .st-emotion-cache-1r6slb0,
+    div[data-testid="stExpander"] {
+        border-radius: 20px !important;
+    }
+
+    div[data-testid="stExpander"] {
+        border: 1px solid rgba(19,23,34,0.06);
+        background: rgba(255,255,255,0.82);
+        box-shadow: 0 10px 28px rgba(17, 24, 39, 0.05);
+    }
+
+    @media (max-width: 900px) {
+        .hero-grid,
+        .detail-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .hero-panel {
+            margin-top: 6px;
+        }
+
+        .detail-header {
+            flex-direction: column;
+        }
     }
 </style>
-""",
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-<div class='main-header'>
-    <h1 style='color: #F80000; margin:0;'>☁️ Intelligent Data Pipeline Monitoring</h1>
-    <h3 style='color: #333333; margin:5px 0;'>OCI Data Engineering Control Tower</h3>
-    <p style='color: #666; margin:0; font-size: 14px;'>
-        Powered by LTIMindtree BlueVerse AI | Monitoring ODI, GoldenGate, and OCI Data Flow
-    </p>
-</div>
 """,
     unsafe_allow_html=True,
 )
@@ -82,9 +528,9 @@ st.markdown(
 blueverse_config, missing_blueverse_keys = load_blueverse_config()
 blueverse_enabled = not missing_blueverse_keys
 
-st.sidebar.header("⚙️ Enterprise Config")
+st.sidebar.header("Enterprise Config")
 live_mode = st.sidebar.toggle(
-    "🌐 Live OCI Telemetry Mode",
+    "Live OCI Telemetry Mode",
     value=False,
     help="Connect directly to Oracle Cloud Infrastructure Monitoring APIs",
 )
@@ -108,74 +554,135 @@ with st.spinner("Synchronizing with OCI Data Fabric..."):
     else:
         oci_pipelines = get_oci_mock_pipelines()
 
-st.caption(
-    f"Last heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
-    f"Monitoring {len(oci_pipelines)} active enterprise data pipelines"
-)
-
-if st.button("🔄 Refresh Telemetry"):
-    st.cache_data.clear()
-    st.rerun()
-
 total = len(oci_pipelines)
 failed = sum(1 for pipeline in oci_pipelines if pipeline["status"] == "FAILED")
 warning = sum(1 for pipeline in oci_pipelines if pipeline["status"] == "WARNING")
 success = sum(1 for pipeline in oci_pipelines if pipeline["status"] == "SUCCESS")
 critical = sum(1 for pipeline in oci_pipelines if get_health_score(pipeline) < 40)
+average_health = round(sum(get_health_score(pipeline) for pipeline in oci_pipelines) / max(total, 1))
+latest_heartbeat = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+mode_label = "Live OCI telemetry" if live_mode else "Mock telemetry"
+ai_label = "BlueVerse ready" if blueverse_enabled else "BlueVerse offline"
+
+st.markdown(
+    f"""
+<div class="main-header">
+    <div class="hero-grid">
+        <div>
+            <div class="hero-eyebrow">OCI Command Surface</div>
+            <h1 class="hero-title">Intelligent Data Pipeline Monitoring</h1>
+            <p class="hero-subtitle">
+                A control tower for Oracle-focused data operations across ODI, GoldenGate, and OCI Data Flow.
+                Monitor throughput, expose schema drift, surface risk, and move from alert to remediation in one screen.
+            </p>
+            <div class="hero-strip">
+                <div class="hero-chip"><strong>{total}</strong> active pipelines</div>
+                <div class="hero-chip"><strong>{mode_label}</strong></div>
+                <div class="hero-chip"><strong>{ai_label}</strong></div>
+                <div class="hero-chip"><strong>Last heartbeat</strong> {latest_heartbeat}</div>
+            </div>
+        </div>
+        <div class="hero-panel">
+            <div class="hero-panel-label">Fleet Health Index</div>
+            <div class="hero-panel-value">{average_health}/100</div>
+            <div class="hero-panel-copy">
+                {success} operational, {warning} degraded, and {failed} failed integrations are currently in view.
+                Use the tabs below to inspect the fleet, generate fixes, and prioritize intervention.
+            </div>
+        </div>
+    </div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f"""
+<div class="status-band">
+    <strong>Control Status:</strong> Monitoring {total} enterprise pipelines with {critical} critical anomalies.
+    Telemetry mode is set to <strong>{mode_label}</strong> and AI assist is <strong>{ai_label}</strong>.
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+if st.button("Refresh Telemetry"):
+    st.cache_data.clear()
+    st.rerun()
 
 col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
-    st.metric("Total Data Assets", total)
+    render_metric_card("Total Assets", total, "Pipelines currently tracked")
 with col2:
-    st.metric("🟢 Operational", success)
+    render_metric_card("Operational", success, "Healthy flows moving normally", tone="success")
 with col3:
-    st.metric("🟡 Warning State", warning)
+    render_metric_card("Warning State", warning, "Pipelines showing early instability", tone="warning")
 with col4:
-    st.metric("🔴 Pipeline Failures", failed, delta=f"-{failed} incidents", delta_color="inverse")
+    render_metric_card("Failures", failed, "Incidents requiring active remediation", tone="danger")
 with col5:
-    st.metric("🚨 Critical Anomalies", critical, help="Pipelines with < 40% Health")
+    render_metric_card("Critical", critical, "Health score below 40", tone="danger")
 
-st.markdown("---")
+st.markdown("")
 
 tab1, tab2, tab3, tab4 = st.tabs(
     [
-        "📊 Fleet Overview",
-        "🤖 AI Auto-Remediation",
-        "🔮 Predict & Prevent",
-        "💬 Support AI Chat",
+        "Fleet Overview",
+        "AI Auto-Remediation",
+        "Predict & Prevent",
+        "Support AI Chat",
     ]
 )
 
 with tab1:
-    st.subheader("Data Fabric Telemetry")
+    render_section_intro(
+        "Operations View",
+        "Fleet Telemetry",
+        "Track throughput, latency, and anomaly state across the current estate. This is the fastest way to spot unhealthy movement patterns across the data fabric.",
+    )
 
     health_data = []
     for pipeline in oci_pipelines:
         score = get_health_score(pipeline)
         health_data.append(
             {
-                "": get_status_emoji(pipeline["status"]),
+                "Status": get_status_emoji(pipeline["status"]),
                 "Pipeline Name": pipeline["pipeline_name"],
                 "Tech Stack": pipeline["type"],
                 "Source": pipeline["source"],
                 "Target": pipeline["target"],
                 "Anomaly": pipeline["anomaly_detected"],
-                "Throughput": f"{pipeline['actual_rows']}/{pipeline['expected_rows']}",
+                "Throughput": f"{pipeline['actual_rows']:,}/{pipeline['expected_rows']:,}",
                 "Latency": f"{pipeline['duration_minutes']}m (avg {pipeline['avg_duration_minutes']}m)",
                 "Health Score": score,
             }
         )
 
     df = pd.DataFrame(health_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Status": st.column_config.TextColumn("Status", width="small"),
+            "Health Score": st.column_config.ProgressColumn(
+                "Health Score",
+                min_value=0,
+                max_value=100,
+                format="%d",
+            ),
+        },
+    )
 
-    st.markdown("---")
-    st.subheader("📈 Visualization & Analytics")
+    st.markdown("")
+    chart_col1, chart_col2 = st.columns(2)
 
-    col_chart1, col_chart2 = st.columns(2)
-
-    with col_chart1:
-        st.markdown("**Volume Throughput (Actual vs Expected)**")
+    with chart_col1:
+        st.markdown('<div class="chart-shell">', unsafe_allow_html=True)
+        st.markdown('<div class="chart-title">Volume Throughput</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="chart-copy">Compare expected volume against actual processed rows to spot ingestion gaps immediately.</div>',
+            unsafe_allow_html=True,
+        )
         df_vol = pd.DataFrame(
             {
                 "Pipeline": [pipeline["pipeline_name"] for pipeline in oci_pipelines],
@@ -188,14 +695,20 @@ with tab1:
             x="Pipeline",
             y=["Expected", "Actual"],
             barmode="group",
-            color_discrete_map={"Expected": "#333333", "Actual": "#C74634"},
+            color_discrete_map={"Expected": "#2B313B", "Actual": "#F35B04"},
             template="plotly_white",
         )
-        fig_vol.update_layout(height=350, margin=dict(l=0, r=0, t=30, b=0))
+        style_volume_chart(fig_vol)
         st.plotly_chart(fig_vol, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    with col_chart2:
-        st.markdown("**Latency Spikes (Duration vs Avg)**")
+    with chart_col2:
+        st.markdown('<div class="chart-shell">', unsafe_allow_html=True)
+        st.markdown('<div class="chart-title">Latency Deviation</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="chart-copy">Read current execution time against historical average to identify drift before it becomes an outage.</div>',
+            unsafe_allow_html=True,
+        )
         df_lat = pd.DataFrame(
             {
                 "Pipeline": [pipeline["pipeline_name"] for pipeline in oci_pipelines],
@@ -210,17 +723,19 @@ with tab1:
             markers=True,
             color_discrete_map={
                 "Current Duration (m)": "#F80000",
-                "Avg Duration (m)": "#00A65A",
+                "Avg Duration (m)": "#117A65",
             },
             template="plotly_white",
         )
-        fig_lat.update_layout(height=350, margin=dict(l=0, r=0, t=30, b=0))
+        style_latency_chart(fig_lat)
         st.plotly_chart(fig_lat, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 with tab2:
-    st.subheader("🤖 AI Root Cause & Code Remediation")
-    st.write(
-        "Detecting volume drops, schema drift, and latency spikes across ODI, GoldenGate, and OCI Data Flow."
+    render_section_intro(
+        "AI Assist",
+        "Root Cause And Remediation",
+        "Select a pipeline anomaly, review the operational context, and ask BlueVerse for a targeted fix with copy-ready steps.",
     )
 
     if not blueverse_enabled:
@@ -233,32 +748,40 @@ with tab2:
         f"{get_status_emoji(pipeline['status'])} {pipeline['pipeline_name']} [{pipeline['type']}] - Anomaly: {pipeline['anomaly_detected']}"
         for pipeline in oci_pipelines
     ]
-    selected = st.selectbox("Select Anomaly to Remediate:", options)
+    selected = st.selectbox("Select anomaly to investigate", options)
     selected_pipeline = oci_pipelines[options.index(selected)]
+    selected_score = get_health_score(selected_pipeline)
 
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.markdown("### Context Vectors")
-        st.info(f"**Integration:** {selected_pipeline['type']}")
-        st.info(f"**Source:** {selected_pipeline['source']} → **Target:** {selected_pipeline['target']}")
-
-        score = get_health_score(selected_pipeline)
-        st.metric("System Health", f"{score}/100")
+    left_col, right_col = st.columns([1.1, 1.4])
+    with left_col:
+        render_pipeline_brief(selected_pipeline, selected_score)
 
         if selected_pipeline["anomaly_detected"] != "None":
-            st.error(f"⚠️ {selected_pipeline['anomaly_detected']}")
+            st.error(f"Anomaly detected: {selected_pipeline['anomaly_detected']}")
 
         if selected_pipeline["schema_changes"]:
             for change in selected_pipeline["schema_changes"]:
-                st.warning(f"🔧 Schema Drift: {change}")
+                st.warning(f"Schema drift: {change}")
+        else:
+            st.success("No schema drift notes are attached to this pipeline.")
 
-    with col2:
+    with right_col:
+        st.markdown(
+            """
+<div class="chart-shell">
+    <div class="chart-title">AI Response Workspace</div>
+    <div class="chart-copy">Generate a structured root-cause explanation and a remediation script tailored to the selected OCI pipeline.</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
         if st.button(
-            "🔍 Generate AI Root Cause & Fix (MTTR -60%)",
+            "Generate AI Root Cause & Fix",
             type="primary",
             disabled=not blueverse_enabled,
         ):
-            with st.spinner(f"🧠 AI analyzing {selected_pipeline['type']} telemetry..."):
+            with st.spinner(f"AI analyzing {selected_pipeline['type']} telemetry..."):
                 result = call_blueverse_agent(
                     build_remediation_prompt(selected_pipeline),
                     blueverse_config,
@@ -268,18 +791,21 @@ with tab2:
             st.session_state["last_fix_pipe"] = selected_pipeline["pipeline_name"]
 
         if "last_fix" in st.session_state and "last_fix_pipe" in st.session_state:
-            st.success(f"✅ Auto-Remediation Generated for {st.session_state['last_fix_pipe']}")
+            st.success(f"Auto-remediation generated for {st.session_state['last_fix_pipe']}")
             st.markdown(st.session_state["last_fix"])
             st.download_button(
-                label="📥 Download Remediation Script",
+                label="Download Remediation Script",
                 data=st.session_state["last_fix"],
                 file_name=f"fix_{st.session_state['last_fix_pipe']}.md",
                 mime="text/markdown",
             )
 
 with tab3:
-    st.subheader("🔮 Predictive Prevention")
-    st.write("Applying heuristic scoring to current pipeline metrics to predict future outages.")
+    render_section_intro(
+        "Preventive Ops",
+        "Intervention Forecasting",
+        "Use the current telemetry snapshot to prioritize which integrations need attention first. This view surfaces deteriorating patterns before total failure.",
+    )
 
     pred_data = []
     for pipeline in oci_pipelines:
@@ -294,17 +820,38 @@ with tab3:
         )
 
     pred_df = pd.DataFrame(pred_data).sort_values(by="Health Score")
-    st.dataframe(pred_df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        pred_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Health Score": st.column_config.ProgressColumn(
+                "Health Score",
+                min_value=0,
+                max_value=100,
+                format="%d",
+            ),
+        },
+    )
 
-    st.markdown("---")
-    st.subheader("🚨 High-Priority Intervention Required")
+    st.markdown("")
+    st.markdown(
+        """
+<div class="section-intro">
+    <div class="section-eyebrow">Priority Queue</div>
+    <h2>High-Priority Intervention Required</h2>
+    <p>These pipelines have the weakest health scores in the fleet and should be reviewed first.</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
     critical_pipes = [pipeline for pipeline in oci_pipelines if get_health_score(pipeline) < 50]
 
     if critical_pipes:
         for pipeline in critical_pipes:
             with st.expander(
-                f"🔴 {pipeline['pipeline_name']} [{pipeline['type']}] — {pipeline['anomaly_detected']}"
+                f"{get_status_emoji(pipeline['status'])} {pipeline['pipeline_name']} [{pipeline['type']}] — {pipeline['anomaly_detected']}"
             ):
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Health", f"{get_health_score(pipeline)}/100")
@@ -319,11 +866,14 @@ with tab3:
                     key=f"tkt_{pipeline['pipeline_name']}",
                 )
     else:
-        st.success("✅ OCI Data Fabric is stable. No predictive failures detected.")
+        st.success("OCI Data Fabric is stable. No predictive failures detected.")
 
 with tab4:
-    st.subheader("💬 OCI AI Data Engineering Assistant")
-    st.write("Talk to your entire Data Fabric. The AI has context over all ODI, GoldenGate, and Data Flow jobs.")
+    render_section_intro(
+        "Operator Console",
+        "Support AI Chat",
+        "Ask questions about pipeline latency, drift, or recovery options. The assistant receives the current telemetry snapshot as context.",
+    )
 
     if not blueverse_enabled:
         st.info(
@@ -360,7 +910,7 @@ st.markdown("---")
 st.markdown(
     """
 <p style='text-align: center; color: #666; font-size: 13px;'>
-    ☁️ Intelligent Data Pipeline Monitoring |
+    OCI Intelligent Data Pipeline Monitoring |
     Pythia-26 Oracle AI Infusion Hackathon |
     Built with LTIMindtree BlueVerse AI |
     Data Engineer: Zero (Danish Mir)
