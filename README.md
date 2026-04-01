@@ -1,78 +1,100 @@
-# ☁️ OCI Intelligent Data Pipeline Monitoring
+# OCI Intelligent Data Pipeline Monitoring
 
 [![Live Demo On Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://oci-intelligent-pipeline-monitor.streamlit.app/)
 
-An Enterprise AI application built for the **Oracle Pythia-26 AI Infusion Hackathon**. 
+An enterprise AI application built for the **Oracle Pythia-26 AI Infusion Hackathon**.
 
-This repository contains a **Data Fabric Control Tower** that monitors Oracle Cloud Infrastructure (OCI) data pipelines—specifically **Oracle Data Integration (ODI), GoldenGate, and OCI Data Flow**. It tracks real-time anomalies such as *schema drift*, *latency spikes*, and *volume drops*. 
+This repository contains a **Data Fabric Control Tower** that monitors Oracle Cloud Infrastructure (OCI) data pipelines, specifically **Oracle Data Integration (ODI), GoldenGate, and OCI Data Flow**. It tracks anomalies such as *schema drift*, *latency spikes*, and *volume drops*.
 
-When an anomaly is detected, the **LTIMindtree BlueVerse AI Agent** determines the root cause and automatically generates an **Auto-Remediation Script** (SQL, Python, or OCI CLI snippet) to reduce Mean Time To Resolution (MTTR) by 60%.
-
----
-
-## 🚀 Features
-- **Fleet Overview**: High-end standard `Plotly` dashboard tracking massive volume and latency anomalies across 8 simulated OCI Enterprise pipelines.
-- **AI Auto-Remediation Copilot**: Instructs a large language model to write specific fix-scripts for failing Oracle integrations.
-- **Predictive Prevention**: Scores system health and forecasts system breakage before total outage.
-- **AI Support Chat**: Provides conversational AI assistance analyzing live JSON telemetry data.
+When an anomaly is detected, the **LTIMindtree BlueVerse AI Agent** can generate an **auto-remediation script** (SQL, Python, or OCI CLI snippet) to help reduce Mean Time To Resolution (MTTR).
 
 ---
 
-## 🛠️ Local Setup Instructions
+## Features
+- **Fleet Overview**: Plotly dashboard tracking volume and latency anomalies across 8 simulated OCI enterprise pipelines.
+- **AI Auto-Remediation Copilot**: Prompts BlueVerse to generate root-cause analysis and fix scripts for failing Oracle integrations.
+- **Predictive Prevention**: Uses local heuristic scoring to highlight pipelines trending toward failure.
+- **AI Support Chat**: Provides conversational assistance over the current pipeline telemetry snapshot.
+- **Graceful Fallbacks**: The dashboard still runs in mock mode when BlueVerse secrets or live OCI telemetry are unavailable.
 
-Follow these instructions to run the application on your own machine.
+---
+
+## Local Setup Instructions
 
 ### 1. Prerequisites
-- [Python 3.9+](https://www.python.org/downloads/) must be installed on your machine.
-- Ensure `pip` is available in your PATH.
+- [Python 3.9+](https://www.python.org/downloads/) installed locally
+- `pip` available in your PATH
 
 ### 2. Create a Virtual Environment
-It is recommended to use a virtual environment to manage dependencies. Open your terminal (or VS Code terminal) in this directory and run:
 
-**For Windows:**
+**Windows**
 ```bash
 python -m venv venv
 venv\Scripts\activate
 ```
 
-**For Mac/Linux:**
+**Mac/Linux**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Install Requirements
-Once your virtual environment is activated, install the required libraries:
-
+### 3. Install Runtime Requirements
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Setup API Credentials (Secrets)
-Because this project connects to the LTIMindtree BlueVerse AI agent, you must configure your API tokens locally.
-1. Inside the `.streamlit/` folder, find the file named `secrets.toml.example`.
-2. Rename it to `secrets.toml` (or create a new file by that name).
-3. Paste in your actual Bearer Token, Flow ID, and Space Name formatting exactly like this:
+### 4. Configure Secrets for BlueVerse
+Because the AI remediation and chat features connect to LTIMindtree BlueVerse, configure credentials locally:
+
+1. Inside the `.streamlit/` folder, find `secrets.toml.example`.
+2. Copy or rename it to `secrets.toml`.
+3. Fill in your real values:
+
 ```toml
 BEARER_TOKEN = "your_actual_long_jwt_token_here"
 API_URL = "https://blueverse-foundry.ltimindtree.com/chatservice/chat"
 SPACE_NAME = "your_space_name"
 FLOW_ID = "your_flow_id"
 ```
-*(Note: Do not commit your real `secrets.toml` to GitHub! The `.gitignore` file guarantees this by default).*
+
+`secrets.toml` is ignored by Git and should stay local.
 
 ### 5. Run the Application
-Start the Streamlit web server:
-
 ```bash
 streamlit run app.py
 ```
 
-Your browser should automatically open `http://localhost:8501` showcasing the gorgeous light-themed OCI Control Tower.
+The app will open at `http://localhost:8501`.
+
+### 6. Run Tests
+Install `pytest` if needed, then run:
+
+```bash
+pip install pytest
+pytest
+```
+
+### 7. Optional Live OCI Integration
+The "Live OCI Telemetry Mode" toggle is still a production placeholder. If you want to build that path out locally, install the OCI SDK separately:
+
+```bash
+pip install oci
+```
 
 ---
 
-## 💡 About 
+## Project Structure
+- `app.py`: Streamlit entrypoint and page layout
+- `analytics.py`: Health scoring and prediction helpers
+- `blueverse.py`: BlueVerse API client with error handling
+- `config.py`: Optional loading of Streamlit secrets
+- `data_sources.py`: Mock pipeline data and OCI live telemetry placeholder
+- `tests/test_analytics.py`: Tests for scoring and predictive logic
+
+---
+
+## About
 - **Developer:** Danish Mir (Zero)
 - **Hackathon:** Pythia-26 Oracle AI Infusion
-- **Tech Stack:** Python, Streamlit, Plotly, OCI Telemetry (Mocked), LTIMindtree BlueVerse API (Claude).
+- **Tech Stack:** Python, Streamlit, Plotly, OCI telemetry (mocked), LTIMindtree BlueVerse API
