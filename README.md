@@ -46,7 +46,20 @@ Once your virtual environment is activated, install the required libraries:
 pip install -r requirements.txt
 ```
 
-### 4. Run the Application
+### 4. Setup API Credentials (Secrets)
+Because this project connects to the LTIMindtree BlueVerse AI agent, you must configure your API tokens locally.
+1. Inside the `.streamlit/` folder, find the file named `secrets.toml.example`.
+2. Rename it to `secrets.toml` (or create a new file by that name).
+3. Paste in your actual Bearer Token, Flow ID, and Space Name formatting exactly like this:
+```toml
+BEARER_TOKEN = "your_actual_long_jwt_token_here"
+API_URL = "https://blueverse-foundry.ltimindtree.com/chatservice/chat"
+SPACE_NAME = "your_space_name"
+FLOW_ID = "your_flow_id"
+```
+*(Note: Do not commit your real `secrets.toml` to GitHub! The `.gitignore` file guarantees this by default).*
+
+### 5. Run the Application
 Start the Streamlit web server:
 
 ```bash
