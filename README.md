@@ -1,5 +1,7 @@
 # ☁️ OCI Intelligent Data Pipeline Monitoring
 
+[![Live Demo On Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://oci-intelligent-pipeline-monitor.streamlit.app/)
+
 An Enterprise AI application built for the **Oracle Pythia-26 AI Infusion Hackathon**. 
 
 This repository contains a **Data Fabric Control Tower** that monitors Oracle Cloud Infrastructure (OCI) data pipelines—specifically **Oracle Data Integration (ODI), GoldenGate, and OCI Data Flow**. It tracks real-time anomalies such as *schema drift*, *latency spikes*, and *volume drops*. 
