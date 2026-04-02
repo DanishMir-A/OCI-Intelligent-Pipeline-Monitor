@@ -92,6 +92,20 @@ pip install oci
 - `data_sources.py`: Mock pipeline data and OCI live telemetry placeholder
 - `tests/test_analytics.py`: Tests for scoring and predictive logic
 
+## Submission Docs
+The repo includes a reviewer-facing `docs/` package for the submission:
+- `docs/SUBMISSION_INDEX.md`
+- `docs/DESIGN_DOCUMENT.md`
+- `docs/ARCHITECTURE_DIAGRAM.md`
+- `docs/DEPLOYMENT_GUIDE.md`
+- `docs/BLUEVERSE_STRATEGY.md`
+- `docs/TEST_PLAN.md`
+- `docs/TEST_RESULTS.md`
+- `docs/DATA_SOURCES_AND_ASSUMPTIONS.md`
+- `docs/KNOWN_LIMITATIONS.md`
+
+Internal team-only preparation notes are intentionally kept outside the public documentation set.
+
 ---
 
 ## About
