@@ -608,7 +608,7 @@ st.sidebar.header("Enterprise Config")
 live_mode = st.sidebar.toggle(
     "Live OCI Telemetry Mode",
     value=False,
-    help="Connect directly to Oracle Cloud Infrastructure Monitoring APIs",
+    help="Connect directly to Oracle Cloud Infrastructure and read live Data Flow run telemetry from the selected compartment.",
 )
 allow_blueverse_fallback = st.sidebar.toggle(
     "Use offline AI fallback",
@@ -622,6 +622,7 @@ saved_connection_status = st.session_state.get("oci_connection_status")
 with st.sidebar.expander("Connect To OCI", expanded=live_mode):
     st.caption(
         "Store OCI connection settings in the current session so the dashboard can attempt a live bridge. "
+        "The current live implementation reads OCI Data Flow run telemetry from the compartment you provide. "
         "For hosted deployments, map these values to managed secrets rather than local files."
     )
     with st.form("oci_connection_form"):
@@ -654,6 +655,7 @@ with st.sidebar.expander("Connect To OCI", expanded=live_mode):
         compartment_ocid = st.text_input(
             "Compartment OCID",
             value=saved_oci_connection.get("compartment_ocid", ""),
+            help="Required for live OCI Data Flow telemetry discovery.",
         )
         key_file = st.text_input(
             "Private key file path",
@@ -719,6 +721,7 @@ if not blueverse_enabled:
 with st.spinner("Synchronizing with OCI Data Fabric..."):
     telemetry_mode = "Mock telemetry"
     telemetry_note = "Using the built-in Oracle pipeline simulator."
+    compartment_configured = bool((saved_oci_connection.get("compartment_ocid") or "").strip())
     if live_mode:
         if has_saved_oci_connection(saved_oci_connection):
             real_data = get_real_oci_telemetry(saved_oci_connection)
@@ -727,12 +730,19 @@ with st.spinner("Synchronizing with OCI Data Fabric..."):
 
         if not real_data:
             if has_saved_oci_connection(saved_oci_connection):
-                telemetry_mode = "OCI bridge simulator"
-                telemetry_note = (
-                    "OCI connection details are attached, but live metric mapping is not active in this deployment. "
-                    "The dashboard is showing normalized Oracle demo telemetry."
-                )
-                st.sidebar.warning(telemetry_note)
+                if not compartment_configured:
+                    telemetry_note = (
+                        "OCI connection details are attached, but live OCI Data Flow telemetry also needs a compartment OCID. "
+                        "The dashboard is showing normalized Oracle demo telemetry."
+                    )
+                    st.sidebar.warning(telemetry_note)
+                else:
+                    telemetry_mode = "OCI bridge simulator"
+                    telemetry_note = (
+                        "OCI connection details are attached, but no live OCI Data Flow runs were returned for the selected compartment. "
+                        "The dashboard is showing normalized Oracle demo telemetry."
+                    )
+                    st.sidebar.warning(telemetry_note)
             else:
                 telemetry_note = (
                     "Live telemetry needs OCI connection details. The dashboard is using the Hackathon mock simulator."
@@ -742,7 +752,7 @@ with st.spinner("Synchronizing with OCI Data Fabric..."):
         else:
             oci_pipelines = real_data
             telemetry_mode = "Live OCI telemetry"
-            telemetry_note = "Live OCI Monitoring telemetry is active."
+            telemetry_note = "Live OCI Data Flow telemetry is active for the selected compartment."
     else:
         oci_pipelines = ensure_mock_pipeline_state()
 
@@ -761,6 +771,15 @@ else:
 connection_label = (
     "OCI bridge attached" if has_saved_oci_connection(saved_oci_connection) else "OCI bridge not attached"
 )
+uses_live_data_flow_metrics = telemetry_mode == "Live OCI telemetry"
+metric_column_label = "Executor Metric" if uses_live_data_flow_metrics else "Throughput"
+metric_chart_title = "Executor Allocation" if uses_live_data_flow_metrics else "Volume Throughput"
+metric_chart_copy = (
+    "Compare current executor allocation against recent baseline executor counts for each OCI Data Flow application."
+    if uses_live_data_flow_metrics
+    else "Compare expected volume against actual processed rows to spot ingestion gaps immediately."
+)
+metric_y_axis = "Executors" if uses_live_data_flow_metrics else "Rows"
 
 st.markdown(
     f"""
@@ -864,7 +883,7 @@ with tab1:
                 "Source": pipeline["source"],
                 "Target": pipeline["target"],
                 "Anomaly": pipeline["anomaly_detected"],
-                "Throughput": f"{pipeline['actual_rows']:,}/{pipeline['expected_rows']:,}",
+                metric_column_label: f"{pipeline['actual_rows']:,}/{pipeline['expected_rows']:,}",
                 "Latency": f"{pipeline['duration_minutes']}m (avg {pipeline['avg_duration_minutes']}m)",
                 "Health Score": score,
             }
@@ -891,9 +910,9 @@ with tab1:
 
     with chart_col1:
         st.markdown('<div class="chart-shell">', unsafe_allow_html=True)
-        st.markdown('<div class="chart-title">Volume Throughput</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chart-title">{metric_chart_title}</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="chart-copy">Compare expected volume against actual processed rows to spot ingestion gaps immediately.</div>',
+            f'<div class="chart-copy">{metric_chart_copy}</div>',
             unsafe_allow_html=True,
         )
         df_vol = pd.DataFrame(
@@ -912,6 +931,7 @@ with tab1:
             template="plotly_white",
         )
         style_volume_chart(fig_vol)
+        fig_vol.update_yaxes(title=metric_y_axis)
         st.plotly_chart(fig_vol, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 

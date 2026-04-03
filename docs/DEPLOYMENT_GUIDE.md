@@ -6,6 +6,7 @@
 - Python 3.9+
 - `pip`
 - network access for BlueVerse API calls when AI features are enabled
+- OCI SDK dependency for live OCI telemetry mode
 
 ### Setup
 ```powershell
@@ -44,6 +45,7 @@ The local dashboard opens at:
 ## Runtime Behavior
 - When BlueVerse secrets are present, remediation and chat workflows are enabled.
 - When BlueVerse secrets are missing, the dashboard remains available and AI features disable gracefully.
+- When valid OCI credentials plus a compartment OCID are provided, the app can read live OCI Data Flow run telemetry.
 - When live OCI telemetry is unavailable, the application falls back to the mock telemetry dataset.
 
 ## Hosted Deployment
@@ -51,7 +53,7 @@ The application is compatible with a hosted Streamlit deployment. A standard hos
 1. the GitHub repository as the source
 2. `app.py` as the entrypoint
 3. hosted secrets configuration for BlueVerse values
-4. optional OCI credentials if live telemetry is implemented later
+4. optional OCI credentials and compartment OCID for live OCI Data Flow telemetry
 
 ## Environment Model
 
@@ -67,6 +69,7 @@ The application is compatible with a hosted Streamlit deployment. A standard hos
 
 ### Production Direction
 - OCI Monitoring ingestion
+- OCI Data Flow run telemetry already supported as the first live OCI source
 - centralized secret management
 - request logging, token tracking, and operational monitoring
 
@@ -74,4 +77,5 @@ The application is compatible with a hosted Streamlit deployment. A standard hos
 - If the app does not start, confirm Python and dependencies are installed.
 - If AI features are disabled, confirm `.streamlit/secrets.toml` exists and includes all required keys.
 - If live mode shows mock data, OCI ingestion is either unavailable or not yet implemented.
+- If live mode still shows mock data after OCI connection succeeds, verify the compartment OCID contains Data Flow applications or recent runs.
 - If BlueVerse requests fail, confirm the bearer token, API URL, space name, and flow ID.

@@ -16,8 +16,15 @@ The current prototype is driven primarily by `get_oci_mock_pipelines()` in `data
 
 This dataset is intentionally shaped to demonstrate realistic Oracle operations scenarios such as throughput loss, schema drift, and latency spikes.
 
-### Future OCI Telemetry Path
-The repository also contains `get_real_oci_telemetry()` as the integration point for future OCI Monitoring ingestion. At present, it remains a safe placeholder and the application falls back to mock data when live OCI telemetry is unavailable.
+### Live OCI Telemetry Path
+The repository now contains a live OCI integration path in `get_real_oci_telemetry()`. The current implementation reads OCI Data Flow run telemetry from a user-supplied compartment and maps those runs into the dashboard schema using:
+- live run lifecycle state
+- live current duration
+- recent run duration averages
+- live executor counts and recent executor-count baselines
+- live run timestamps
+
+When live OCI data is unavailable or the compartment has no recent Data Flow activity, the application falls back to the mock telemetry dataset.
 
 ## Oracle Assumptions
 The project assumes an Oracle enterprise landscape where:
@@ -41,9 +48,11 @@ The BlueVerse workflows assume that:
 - local analytics and prioritization logic
 - BlueVerse API integration
 - graceful failure handling for missing secrets and failed API responses
+- live OCI Data Flow run ingestion for a configured compartment
 
 ### Not Yet Implemented
-- live OCI Monitoring metric mapping
+- OCI Monitoring metric mapping
+- GoldenGate and ODI live metric collectors
 - persistent token logging
 - persistent cost tracking
 - multi-provider LLM fallback
