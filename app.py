@@ -31,14 +31,17 @@ Respond STRICTLY in the following format using Markdown:
 """.strip()
 
 
-def build_chat_prompt(pipelines, prompt):
+def build_chat_prompt(pipelines, history):
+    history_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in history])
     return f"""
 You are an expert Oracle Cloud AI Assistant.
 Here is the current real-time state of the enterprise data fabric:
 {json.dumps(pipelines, indent=2)}
 
-The user asks: {prompt}
-Answer correctly based on the pipeline data above. Provide actionable, concise Oracle-specific advice.
+--- CONVERSATION HISTORY ---
+{history_text}
+
+Respond directly to the user's latest query accurately based on the pipeline data above. Provide actionable, concise Oracle-specific advice.
 """.strip()
 
 
@@ -782,16 +785,19 @@ with tab2:
             disabled=not blueverse_enabled,
         ):
             with st.spinner(f"AI analyzing {selected_pipeline['type']} telemetry..."):
-                result = call_blueverse_agent(
+                result, tokens, cost = call_blueverse_agent(
                     build_remediation_prompt(selected_pipeline),
                     blueverse_config,
                 )
 
             st.session_state["last_fix"] = result
             st.session_state["last_fix_pipe"] = selected_pipeline["pipeline_name"]
+            st.session_state["last_fix_tokens"] = tokens
+            st.session_state["last_fix_cost"] = cost
 
         if "last_fix" in st.session_state and "last_fix_pipe" in st.session_state:
             st.success(f"Auto-remediation generated for {st.session_state['last_fix_pipe']}")
+            st.markdown(f"**⚡ Tokens:** {st.session_state.get('last_fix_tokens', 0):,} | **💰 Est. Cost:** ${st.session_state.get('last_fix_cost', 0):.4f}")
             st.markdown(st.session_state["last_fix"])
             st.download_button(
                 label="Download Remediation Script",
@@ -898,11 +904,12 @@ with tab4:
 
         with st.chat_message("assistant"):
             with st.spinner("Analyzing data fabric..."):
-                response = call_blueverse_agent(
-                    build_chat_prompt(oci_pipelines, prompt),
+                response, tokens, cost = call_blueverse_agent(
+                    build_chat_prompt(oci_pipelines, st.session_state.messages),
                     blueverse_config,
                 )
             st.markdown(response)
+            st.caption(f"⚡ Tokens: {tokens:,} | 💰 Cost: ${cost:.4f}")
 
         st.session_state.messages.append({"role": "assistant", "content": response})
 
