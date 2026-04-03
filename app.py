@@ -8,7 +8,12 @@ import streamlit as st
 from analytics import get_health_score, get_status_emoji, predict_failure
 from blueverse import call_blueverse_agent
 from config import load_blueverse_config
-from data_sources import get_oci_mock_pipelines, get_real_oci_telemetry, test_oci_connection
+from data_sources import (
+    get_oci_mock_pipelines,
+    get_real_oci_telemetry,
+    rerun_data_flow_pipeline,
+    test_oci_connection,
+)
 
 
 def build_remediation_prompt(selected_pipeline):
@@ -175,6 +180,12 @@ def clear_remediation_state():
         "last_fix_apply_mode",
     ):
         st.session_state.pop(key, None)
+
+
+def append_action_log(entry):
+    if "action_log" not in st.session_state:
+        st.session_state["action_log"] = []
+    st.session_state["action_log"].insert(0, entry)
 
 
 def get_saved_oci_connection():
@@ -1063,6 +1074,90 @@ with tab2:
                 f"AI remediation applied in {st.session_state.get('last_fix_apply_mode', 'demo mode')} at "
                 f"{st.session_state.get('last_fix_applied_at', 'the current session')}."
             )
+
+        st.markdown("")
+        st.markdown(
+            """
+<div class="chart-shell">
+    <div class="chart-title">Enterprise Action Control</div>
+    <div class="chart-copy">Governed operator actions for live OCI pipelines. Use approval gating before triggering a live rerun.</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        live_rerun_supported = (
+            telemetry_mode == "Live OCI telemetry"
+            and selected_pipeline.get("type") == "OCI Data Flow"
+            and selected_pipeline.get("live_action_supported")
+        )
+        action_reason = st.text_area(
+            "Change justification",
+            value=f"Restore service for {selected_pipeline['pipeline_name']} based on AI root-cause assessment.",
+            height=90,
+            key=f"action_reason_{selected_pipeline['pipeline_name']}",
+        )
+        approval_checked = st.checkbox(
+            "I approve this live OCI action and understand it will submit a new Data Flow run.",
+            key=f"approve_live_action_{selected_pipeline['pipeline_name']}",
+        )
+
+        if telemetry_mode == "Live OCI telemetry":
+            if live_rerun_supported:
+                if st.button(
+                    "Execute Live OCI Rerun",
+                    type="primary",
+                    disabled=not approval_checked,
+                    key=f"rerun_live_{selected_pipeline['pipeline_name']}",
+                ):
+                    with st.spinner("Submitting OCI Data Flow rerun..."):
+                        success, message, payload = rerun_data_flow_pipeline(
+                            saved_oci_connection,
+                            selected_pipeline,
+                        )
+
+                    audit_entry = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "pipeline": selected_pipeline["pipeline_name"],
+                        "mode": telemetry_mode,
+                        "action": "OCI Data Flow rerun",
+                        "approved": approval_checked,
+                        "reason": action_reason.strip() or "No justification entered.",
+                        "status": "SUCCESS" if success else "FAILED",
+                        "detail": message,
+                        "run_id": (payload or {}).get("run_id"),
+                        "request_id": (payload or {}).get("opc_request_id"),
+                    }
+                    append_action_log(audit_entry)
+
+                    if success:
+                        st.success(
+                            f"{message} Run ID: {(payload or {}).get('run_id', 'unavailable')} | "
+                            f"Request ID: {(payload or {}).get('opc_request_id', 'unavailable')}"
+                        )
+                    else:
+                        st.error(message)
+            else:
+                st.info(
+                    "Live action is currently supported for OCI Data Flow pipelines that include a discovered application ID."
+                )
+        else:
+            st.caption(
+                "Live rerun controls activate only when the dashboard is connected to real OCI Data Flow telemetry."
+            )
+
+        if st.session_state.get("action_log"):
+            with st.expander("Operator Action Audit Trail", expanded=False):
+                for entry in st.session_state["action_log"]:
+                    st.markdown(
+                        f"**{entry['timestamp']}** | `{entry['status']}` | `{entry['action']}` | "
+                        f"`{entry['pipeline']}` | {entry['detail']}"
+                    )
+                    if entry.get("run_id") or entry.get("request_id"):
+                        st.caption(
+                            f"Run ID: {entry.get('run_id', 'n/a')} | Request ID: {entry.get('request_id', 'n/a')}"
+                        )
+                    st.caption(f"Justification: {entry['reason']}")
 
 with tab3:
     render_section_intro(

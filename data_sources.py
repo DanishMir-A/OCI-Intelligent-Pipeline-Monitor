@@ -200,10 +200,48 @@ def fetch_data_flow_runs(config, compartment_id, limit=20):
                 "anomaly_detected": anomaly,
                 "schema_changes": schema_changes,
                 "last_run": last_run,
-            }
+                "application_id": application_id,
+                "run_id": getattr(run_data, "id", None),
+                "lifecycle_state": lifecycle_state,
+                "live_action_supported": bool(application_id),
+                }
         )
 
     return pipeline_records
+
+
+def rerun_data_flow_pipeline(connection_settings, pipeline_record):
+    if not oci or not connection_settings:
+        return False, "OCI SDK or connection settings are unavailable.", None
+
+    application_id = (pipeline_record.get("application_id") or "").strip()
+    compartment_id = (connection_settings.get("compartment_ocid") or "").strip()
+    if not application_id or not compartment_id:
+        return False, "Live rerun needs both an OCI Data Flow application ID and a compartment OCID.", None
+
+    try:
+        config = build_oci_config(connection_settings)
+        if not config:
+            return False, "OCI configuration is incomplete.", None
+
+        data_flow_client = oci.data_flow.DataFlowClient(config)
+        rerun_display_name = f"rerun-{pipeline_record['pipeline_name']}-{datetime.now().strftime('%H%M%S')}"
+        create_run_details = oci.data_flow.models.CreateRunDetails(
+            application_id=application_id,
+            compartment_id=compartment_id,
+            display_name=rerun_display_name,
+        )
+        response = data_flow_client.create_run(create_run_details)
+        run = response.data
+        action_payload = {
+            "run_id": getattr(run, "id", None),
+            "display_name": getattr(run, "display_name", rerun_display_name),
+            "lifecycle_state": getattr(run, "lifecycle_state", "ACCEPTED"),
+            "opc_request_id": response.headers.get("opc-request-id"),
+        }
+        return True, "OCI Data Flow rerun submitted successfully.", action_payload
+    except Exception as exc:
+        return False, f"OCI Data Flow rerun failed: {exc}", None
 
 
 def get_real_oci_telemetry(connection_settings=None):
