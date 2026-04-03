@@ -8,7 +8,7 @@ import streamlit as st
 from analytics import get_health_score, get_status_emoji, predict_failure
 from blueverse import call_blueverse_agent
 from config import load_blueverse_config
-from data_sources import get_oci_mock_pipelines, get_real_oci_telemetry
+from data_sources import get_oci_mock_pipelines, get_real_oci_telemetry, test_oci_connection
 
 
 def build_remediation_prompt(selected_pipeline):
@@ -146,6 +146,79 @@ def style_latency_chart(fig):
         yaxis=dict(title="Minutes", gridcolor="#E6E8EB", zeroline=False),
     )
     fig.update_traces(line_width=3, marker_size=8)
+
+
+def clone_pipeline_record(pipeline):
+    cloned = dict(pipeline)
+    cloned["schema_changes"] = list(pipeline.get("schema_changes", []))
+    return cloned
+
+
+def load_default_mock_pipelines():
+    return [clone_pipeline_record(pipeline) for pipeline in get_oci_mock_pipelines()]
+
+
+def ensure_mock_pipeline_state(force_reset=False):
+    if force_reset or "mock_pipelines" not in st.session_state:
+        st.session_state["mock_pipelines"] = load_default_mock_pipelines()
+    return st.session_state["mock_pipelines"]
+
+
+def clear_remediation_state():
+    for key in (
+        "last_fix",
+        "last_fix_pipe",
+        "last_fix_tokens",
+        "last_fix_cost",
+        "last_fix_applied_pipe",
+        "last_fix_applied_at",
+        "last_fix_apply_mode",
+    ):
+        st.session_state.pop(key, None)
+
+
+def get_saved_oci_connection():
+    return st.session_state.get(
+        "oci_connection",
+        {
+            "config_path": "",
+            "profile_name": "DEFAULT",
+            "tenancy_ocid": "",
+            "user_ocid": "",
+            "fingerprint": "",
+            "region": "",
+            "compartment_ocid": "",
+            "key_file": "",
+            "pass_phrase": "",
+        },
+    )
+
+
+def has_saved_oci_connection(connection):
+    meaningful_fields = (
+        "config_path",
+        "tenancy_ocid",
+        "user_ocid",
+        "fingerprint",
+        "region",
+        "compartment_ocid",
+        "key_file",
+    )
+    return any(str(connection.get(field, "")).strip() for field in meaningful_fields)
+
+
+def apply_mock_fix(pipeline_name):
+    pipelines = ensure_mock_pipeline_state()
+    for pipeline in pipelines:
+        if pipeline["pipeline_name"] == pipeline_name:
+            pipeline["status"] = "SUCCESS"
+            pipeline["actual_rows"] = pipeline["expected_rows"]
+            pipeline["duration_minutes"] = max(1, pipeline["avg_duration_minutes"])
+            pipeline["anomaly_detected"] = "None"
+            pipeline["schema_changes"] = []
+            pipeline["last_run"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return clone_pipeline_record(pipeline)
+    return None
 
 
 st.set_page_config(
@@ -538,6 +611,100 @@ live_mode = st.sidebar.toggle(
     help="Connect directly to Oracle Cloud Infrastructure Monitoring APIs",
 )
 
+saved_oci_connection = get_saved_oci_connection()
+saved_connection_status = st.session_state.get("oci_connection_status")
+
+with st.sidebar.expander("Connect To OCI", expanded=live_mode):
+    st.caption(
+        "Store OCI connection settings in the current session so the dashboard can attempt a live bridge. "
+        "For hosted deployments, map these values to managed secrets rather than local files."
+    )
+    with st.form("oci_connection_form"):
+        config_path = st.text_input(
+            "OCI config file path",
+            value=saved_oci_connection.get("config_path", ""),
+            help="Optional. Use this if you already have a local OCI config file.",
+        )
+        profile_name = st.text_input(
+            "OCI profile name",
+            value=saved_oci_connection.get("profile_name", "DEFAULT"),
+        )
+        tenancy_ocid = st.text_input(
+            "Tenancy OCID",
+            value=saved_oci_connection.get("tenancy_ocid", ""),
+        )
+        user_ocid = st.text_input(
+            "User OCID",
+            value=saved_oci_connection.get("user_ocid", ""),
+        )
+        fingerprint = st.text_input(
+            "API key fingerprint",
+            value=saved_oci_connection.get("fingerprint", ""),
+        )
+        region = st.text_input(
+            "Region",
+            value=saved_oci_connection.get("region", ""),
+            help="Example: ap-mumbai-1",
+        )
+        compartment_ocid = st.text_input(
+            "Compartment OCID",
+            value=saved_oci_connection.get("compartment_ocid", ""),
+        )
+        key_file = st.text_input(
+            "Private key file path",
+            value=saved_oci_connection.get("key_file", ""),
+            help="Optional when using a config file path. Required for inline OCI fields.",
+        )
+        pass_phrase = st.text_input(
+            "Private key pass phrase",
+            value=saved_oci_connection.get("pass_phrase", ""),
+            type="password",
+        )
+        save_connection = st.form_submit_button("Save OCI Connection")
+        clear_connection = st.form_submit_button("Clear OCI Connection")
+
+    if save_connection:
+        st.session_state["oci_connection"] = {
+            "config_path": config_path,
+            "profile_name": profile_name,
+            "tenancy_ocid": tenancy_ocid,
+            "user_ocid": user_ocid,
+            "fingerprint": fingerprint,
+            "region": region,
+            "compartment_ocid": compartment_ocid,
+            "key_file": key_file,
+            "pass_phrase": pass_phrase,
+        }
+        is_valid, status_message = test_oci_connection(st.session_state["oci_connection"])
+        st.session_state["oci_connection_status"] = {
+            "ok": is_valid,
+            "message": status_message,
+        }
+        saved_oci_connection = st.session_state["oci_connection"]
+        saved_connection_status = st.session_state["oci_connection_status"]
+
+    if clear_connection:
+        st.session_state["oci_connection"] = {
+            "config_path": "",
+            "profile_name": "DEFAULT",
+            "tenancy_ocid": "",
+            "user_ocid": "",
+            "fingerprint": "",
+            "region": "",
+            "compartment_ocid": "",
+            "key_file": "",
+            "pass_phrase": "",
+        }
+        st.session_state.pop("oci_connection_status", None)
+        saved_oci_connection = st.session_state["oci_connection"]
+        saved_connection_status = None
+
+    if saved_connection_status:
+        if saved_connection_status.get("ok"):
+            st.success(saved_connection_status["message"])
+        else:
+            st.warning(saved_connection_status["message"])
+
 if not blueverse_enabled:
     st.sidebar.info(
         "AI features are disabled until these Streamlit secrets are configured: "
@@ -545,17 +712,34 @@ if not blueverse_enabled:
     )
 
 with st.spinner("Synchronizing with OCI Data Fabric..."):
+    telemetry_mode = "Mock telemetry"
+    telemetry_note = "Using the built-in Oracle pipeline simulator."
     if live_mode:
-        real_data = get_real_oci_telemetry()
+        if has_saved_oci_connection(saved_oci_connection):
+            real_data = get_real_oci_telemetry(saved_oci_connection)
+        else:
+            real_data = None
+
         if not real_data:
-            st.sidebar.warning(
-                "Live OCI telemetry is unavailable, so the dashboard is using the Hackathon mock simulator."
-            )
-            oci_pipelines = get_oci_mock_pipelines()
+            if has_saved_oci_connection(saved_oci_connection):
+                telemetry_mode = "OCI bridge simulator"
+                telemetry_note = (
+                    "OCI connection details are attached, but live metric mapping is not active in this deployment. "
+                    "The dashboard is showing normalized Oracle demo telemetry."
+                )
+                st.sidebar.warning(telemetry_note)
+            else:
+                telemetry_note = (
+                    "Live telemetry needs OCI connection details. The dashboard is using the Hackathon mock simulator."
+                )
+                st.sidebar.info(telemetry_note)
+            oci_pipelines = ensure_mock_pipeline_state()
         else:
             oci_pipelines = real_data
+            telemetry_mode = "Live OCI telemetry"
+            telemetry_note = "Live OCI Monitoring telemetry is active."
     else:
-        oci_pipelines = get_oci_mock_pipelines()
+        oci_pipelines = ensure_mock_pipeline_state()
 
 total = len(oci_pipelines)
 failed = sum(1 for pipeline in oci_pipelines if pipeline["status"] == "FAILED")
@@ -564,8 +748,11 @@ success = sum(1 for pipeline in oci_pipelines if pipeline["status"] == "SUCCESS"
 critical = sum(1 for pipeline in oci_pipelines if get_health_score(pipeline) < 40)
 average_health = round(sum(get_health_score(pipeline) for pipeline in oci_pipelines) / max(total, 1))
 latest_heartbeat = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-mode_label = "Live OCI telemetry" if live_mode else "Mock telemetry"
+mode_label = telemetry_mode
 ai_label = "BlueVerse ready" if blueverse_enabled else "BlueVerse offline"
+connection_label = (
+    "OCI bridge attached" if has_saved_oci_connection(saved_oci_connection) else "OCI bridge not attached"
+)
 
 st.markdown(
     f"""
@@ -581,6 +768,7 @@ st.markdown(
             <div class="hero-strip">
                 <div class="hero-chip"><strong>{total}</strong> active pipelines</div>
                 <div class="hero-chip"><strong>{mode_label}</strong></div>
+                <div class="hero-chip"><strong>{connection_label}</strong></div>
                 <div class="hero-chip"><strong>{ai_label}</strong></div>
                 <div class="hero-chip"><strong>Last heartbeat</strong> {latest_heartbeat}</div>
             </div>
@@ -603,15 +791,29 @@ st.markdown(
     f"""
 <div class="status-band">
     <strong>Control Status:</strong> Monitoring {total} enterprise pipelines with {critical} critical anomalies.
-    Telemetry mode is set to <strong>{mode_label}</strong> and AI assist is <strong>{ai_label}</strong>.
+    Telemetry mode is set to <strong>{mode_label}</strong>, the OCI bridge is <strong>{connection_label}</strong>,
+    and AI assist is <strong>{ai_label}</strong>.
 </div>
 """,
     unsafe_allow_html=True,
 )
 
-if st.button("Refresh Telemetry"):
-    st.cache_data.clear()
-    st.rerun()
+st.caption(telemetry_note)
+
+control_col1, control_col2, _ = st.columns([1.1, 1.2, 4])
+with control_col1:
+    if st.button("Refresh Telemetry"):
+        st.cache_data.clear()
+        st.rerun()
+with control_col2:
+    if st.button(
+        "Reset Demo State",
+        disabled=telemetry_mode == "Live OCI telemetry",
+        help="Reset simulated telemetry and clear any applied remediation actions.",
+    ):
+        ensure_mock_pipeline_state(force_reset=True)
+        clear_remediation_state()
+        st.rerun()
 
 col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
@@ -804,6 +1006,33 @@ with tab2:
                 data=st.session_state["last_fix"],
                 file_name=f"fix_{st.session_state['last_fix_pipe']}.md",
                 mime="text/markdown",
+            )
+
+            can_apply_fix = st.session_state["last_fix_pipe"] == selected_pipeline["pipeline_name"]
+            apply_help = (
+                "Apply the AI fix directly to the session-backed telemetry simulator and refresh the dashboard."
+                if telemetry_mode != "Live OCI telemetry"
+                else "Live apply requires backend orchestration and an approved OCI action layer."
+            )
+            if st.button(
+                "Apply Fix To Pipeline",
+                disabled=not can_apply_fix or telemetry_mode == "Live OCI telemetry",
+                help=apply_help,
+            ):
+                recovered_pipeline = apply_mock_fix(selected_pipeline["pipeline_name"])
+                if recovered_pipeline:
+                    st.session_state["last_fix_applied_pipe"] = recovered_pipeline["pipeline_name"]
+                    st.session_state["last_fix_applied_at"] = recovered_pipeline["last_run"]
+                    st.session_state["last_fix_apply_mode"] = telemetry_mode
+                    st.rerun()
+
+            if not can_apply_fix:
+                st.info("Generate a fix for the currently selected pipeline before applying it.")
+
+        if st.session_state.get("last_fix_applied_pipe") == selected_pipeline["pipeline_name"]:
+            st.success(
+                f"AI remediation applied in {st.session_state.get('last_fix_apply_mode', 'demo mode')} at "
+                f"{st.session_state.get('last_fix_applied_at', 'the current session')}."
             )
 
 with tab3:

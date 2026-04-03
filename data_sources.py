@@ -8,16 +8,73 @@ except ImportError:
     oci = None
 
 
-def get_real_oci_telemetry():
+OCI_REQUIRED_FIELDS = ("tenancy_ocid", "user_ocid", "fingerprint", "region", "key_file")
+
+
+def build_oci_config(connection_settings):
+    if not connection_settings:
+        return None
+
+    config_path = (connection_settings.get("config_path") or "").strip()
+    profile_name = (connection_settings.get("profile_name") or "DEFAULT").strip() or "DEFAULT"
+
+    if config_path:
+        return oci.config.from_file(file_location=config_path, profile_name=profile_name)
+
+    if all((connection_settings.get(field) or "").strip() for field in OCI_REQUIRED_FIELDS):
+        config = {
+            "user": connection_settings["user_ocid"].strip(),
+            "fingerprint": connection_settings["fingerprint"].strip(),
+            "tenancy": connection_settings["tenancy_ocid"].strip(),
+            "region": connection_settings["region"].strip(),
+            "key_file": connection_settings["key_file"].strip(),
+        }
+        pass_phrase = (connection_settings.get("pass_phrase") or "").strip()
+        if pass_phrase:
+            config["pass_phrase"] = pass_phrase
+        return config
+
+    return None
+
+
+def test_oci_connection(connection_settings):
+    """Validate whether the supplied OCI connection settings are usable."""
+    if not connection_settings:
+        return False, "Add OCI credentials or a config file path to enable the live connection bridge."
+
+    if not oci:
+        return False, "OCI SDK is not installed in this environment, so the app will stay in simulator mode."
+
+    try:
+        config = build_oci_config(connection_settings)
+    except Exception as exc:
+        return False, f"Unable to read OCI config: {exc}"
+
+    if not config:
+        return (
+            False,
+            "Provide either an OCI config file path or the required inline fields: tenancy, user, fingerprint, region, and key file.",
+        )
+
+    try:
+        oci.monitoring.MonitoringClient(config)
+        return True, "OCI connection validated. The app can now attempt live telemetry retrieval."
+    except Exception as exc:
+        return False, f"OCI connection validation failed: {exc}"
+
+
+def get_real_oci_telemetry(connection_settings=None):
     """
     Production placeholder for OCI Monitoring integration.
     Returns None when live telemetry is unavailable so the UI can fall back safely.
     """
-    if not oci:
+    if not oci or not connection_settings:
         return None
 
     try:
-        config = oci.config.from_file()
+        config = build_oci_config(connection_settings)
+        if not config:
+            return None
         oci.monitoring.MonitoringClient(config)
 
         # Future implementation:
