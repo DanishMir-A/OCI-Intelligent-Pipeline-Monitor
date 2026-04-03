@@ -41,6 +41,19 @@ def build_response_triplet(response_text, tokens=None, rate_per_1k=0.001, prompt
     return safe_text, total_tokens, calculate_cost(total_tokens, rate_per_1k=rate_per_1k)
 
 
+def build_error_triplet(title, detail, prompt_text=""):
+    response_text = f"""### BlueVerse Request Failed
+{detail}
+
+### What To Check
+1. Confirm `BEARER_TOKEN`, `API_URL`, `SPACE_NAME`, and `FLOW_ID` are set correctly in Streamlit secrets.
+2. Verify the deployed environment can reach the BlueVerse endpoint.
+3. Confirm the token is active for the configured space and flow.
+
+_The app is currently set to require a real BlueVerse response, so no offline fallback was used._"""
+    return build_response_triplet(response_text, prompt_text=prompt_text)
+
+
 def extract_pipeline_context(query):
     marker = "PIPELINE CONTEXT:"
     task_marker = "\n\nYOUR TASK:"
@@ -231,6 +244,55 @@ def build_chat_fallback(query):
     )
 
 
+def extract_text_from_result(result):
+    if result is None:
+        return None
+    if isinstance(result, str):
+        return result
+    if isinstance(result, (int, float, bool)):
+        return str(result)
+    if isinstance(result, list):
+        for item in result:
+            extracted = extract_text_from_result(item)
+            if extracted:
+                return extracted
+        return None
+    if isinstance(result, dict):
+        preferred_keys = (
+            "response",
+            "answer",
+            "output",
+            "message",
+            "content",
+            "text",
+            "result",
+            "data",
+        )
+        for key in preferred_keys:
+            if key in result:
+                extracted = extract_text_from_result(result[key])
+                if extracted:
+                    return extracted
+    return None
+
+
+def extract_total_tokens(result):
+    if isinstance(result, dict):
+        usage = result.get("usage")
+        if isinstance(usage, dict) and usage.get("total_tokens"):
+            return usage.get("total_tokens")
+        for value in result.values():
+            extracted = extract_total_tokens(value)
+            if extracted:
+                return extracted
+    elif isinstance(result, list):
+        for item in result:
+            extracted = extract_total_tokens(item)
+            if extracted:
+                return extracted
+    return None
+
+
 def mock_claude_fallback(query):
     """
     MOCK CLAUDE FALLBACK: Fulfills Requirement 2.4 (Graceful Fallback Chain).
@@ -249,7 +311,7 @@ def mock_claude_fallback(query):
     )
 
 
-def call_blueverse_agent(raw_query, config, enable_rag=True):
+def call_blueverse_agent(raw_query, config, enable_rag=True, allow_fallback=False):
     """
     Main API integration. 
     Returns: (response_text, total_tokens, cost)
@@ -258,7 +320,10 @@ def call_blueverse_agent(raw_query, config, enable_rag=True):
     api_url = config.get("API_URL", "").strip()
 
     if not api_url:
-        return build_response_triplet(
+        if allow_fallback:
+            return mock_claude_fallback(query)
+        return build_error_triplet(
+            "BlueVerse is not configured for this environment.",
             "BlueVerse is not configured for this environment. Add the required secrets to enable AI responses.",
             prompt_text=query,
         )
@@ -282,29 +347,46 @@ def call_blueverse_agent(raw_query, config, enable_rag=True):
         )
         response.raise_for_status()
     except (requests.Timeout, requests.HTTPError, requests.ConnectionError, requests.RequestException) as e:
-        # FULFILL REQUIREMENT 2.4: FALLBACK CHAIN (BlueVerse -> Claude)
-        print(f"BlueVerse API Failed: {e}. Falling back to Claude.")
-        return mock_claude_fallback(query)
+        print(f"BlueVerse API Failed: {e}.")
+        if allow_fallback:
+            return mock_claude_fallback(query)
+        return build_error_triplet(
+            "BlueVerse request failed.",
+            f"BlueVerse request failed with: `{e}`",
+            prompt_text=query,
+        )
     except Exception as e:
-        print(f"Unexpected BlueVerse client error: {e}. Falling back to Claude.")
-        return mock_claude_fallback(query)
+        print(f"Unexpected BlueVerse client error: {e}.")
+        if allow_fallback:
+            return mock_claude_fallback(query)
+        return build_error_triplet(
+            "Unexpected BlueVerse client error.",
+            f"Unexpected BlueVerse client error: `{e}`",
+            prompt_text=query,
+        )
 
     try:
         result = response.json()
     except ValueError:
-        return mock_claude_fallback(query)
+        if allow_fallback:
+            return mock_claude_fallback(query)
+        preview = response.text.strip()[:500] or "Empty response body."
+        return build_error_triplet(
+            "BlueVerse returned a non-JSON response.",
+            f"BlueVerse returned a non-JSON response: `{preview}`",
+            prompt_text=query,
+        )
 
     # Attempt to extract response
-    if isinstance(result, dict):
-        response_text = (
-            result.get("response")
-            or result.get("message")
-            or result.get("output")
-            or str(result)
-        )
-        usage = result.get("usage")
-        total_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+    response_text = extract_text_from_result(result)
+    total_tokens = extract_total_tokens(result)
+    if response_text:
         return build_response_triplet(response_text, tokens=total_tokens, prompt_text=query)
 
-    # Fallback absolute worst case
-    return build_response_triplet(result, prompt_text=query)
+    if allow_fallback:
+        return mock_claude_fallback(query)
+    return build_error_triplet(
+        "BlueVerse returned an unexpected payload.",
+        f"BlueVerse returned a payload shape the app could not parse: `{json.dumps(result)[:500]}`",
+        prompt_text=query,
+    )

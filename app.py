@@ -610,6 +610,11 @@ live_mode = st.sidebar.toggle(
     value=False,
     help="Connect directly to Oracle Cloud Infrastructure Monitoring APIs",
 )
+allow_blueverse_fallback = st.sidebar.toggle(
+    "Use offline AI fallback",
+    value=False,
+    help="Turn this on only if you want simulated AI output when BlueVerse is unavailable.",
+)
 
 saved_oci_connection = get_saved_oci_connection()
 saved_connection_status = st.session_state.get("oci_connection_status")
@@ -749,7 +754,10 @@ critical = sum(1 for pipeline in oci_pipelines if get_health_score(pipeline) < 4
 average_health = round(sum(get_health_score(pipeline) for pipeline in oci_pipelines) / max(total, 1))
 latest_heartbeat = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 mode_label = telemetry_mode
-ai_label = "BlueVerse ready" if blueverse_enabled else "BlueVerse offline"
+if blueverse_enabled:
+    ai_label = "BlueVerse live only" if not allow_blueverse_fallback else "BlueVerse with fallback"
+else:
+    ai_label = "BlueVerse offline"
 connection_label = (
     "OCI bridge attached" if has_saved_oci_connection(saved_oci_connection) else "OCI bridge not attached"
 )
@@ -990,6 +998,7 @@ with tab2:
                 result, tokens, cost = call_blueverse_agent(
                     build_remediation_prompt(selected_pipeline),
                     blueverse_config,
+                    allow_fallback=allow_blueverse_fallback,
                 )
 
             st.session_state["last_fix"] = result
@@ -1136,6 +1145,7 @@ with tab4:
                 response, tokens, cost = call_blueverse_agent(
                     build_chat_prompt(oci_pipelines, st.session_state.messages),
                     blueverse_config,
+                    allow_fallback=allow_blueverse_fallback,
                 )
             st.markdown(response)
             st.caption(f"⚡ Tokens: {tokens:,} | 💰 Cost: ${cost:.4f}")
