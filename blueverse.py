@@ -27,6 +27,18 @@ def calculate_cost(tokens, rate_per_1k=0.001):
     return (tokens / 1000.0) * rate_per_1k
 
 
+def estimate_tokens(prompt_text, response_text):
+    prompt_tokens = len(str(prompt_text).split()) * 1.3
+    completion_tokens = len(str(response_text).split()) * 1.3
+    return int(prompt_tokens + completion_tokens)
+
+
+def build_response_triplet(response_text, tokens=None, rate_per_1k=0.001, prompt_text=""):
+    safe_text = str(response_text)
+    total_tokens = int(tokens) if tokens else estimate_tokens(prompt_text, safe_text)
+    return safe_text, total_tokens, calculate_cost(total_tokens, rate_per_1k=rate_per_1k)
+
+
 def mock_claude_fallback(query):
     """
     MOCK CLAUDE FALLBACK: Fulfills Requirement 2.4 (Graceful Fallback Chain).
@@ -35,13 +47,11 @@ def mock_claude_fallback(query):
     # Simulate a Claude response
     response_text = "[FALLBACK TRIGGERED: BlueVerse Timeout. Routed to Claude 3.5 Sonnet]\n\nBased on your Oracle query, I recommend checking the GoldenGate log dump. The ORA-01438 error means you need to use an ALTER TABLE statement to increase the column precision."
     
-    # Calculate simulated tokens
-    prompt_tokens = len(query.split()) * 1.3
-    completion_tokens = len(response_text.split()) * 1.3
-    total_tokens = int(prompt_tokens + completion_tokens)
-    
-    cost = calculate_cost(total_tokens, rate_per_1k=0.003) # Claude rate
-    return response_text, total_tokens, cost
+    return build_response_triplet(
+        response_text,
+        rate_per_1k=0.003,
+        prompt_text=query,
+    )
 
 
 def call_blueverse_agent(raw_query, config, enable_rag=True):
@@ -50,6 +60,13 @@ def call_blueverse_agent(raw_query, config, enable_rag=True):
     Returns: (response_text, total_tokens, cost)
     """
     query = inject_oracle_rag_context(raw_query) if enable_rag else raw_query
+    api_url = config.get("API_URL", "").strip()
+
+    if not api_url:
+        return build_response_triplet(
+            "BlueVerse is not configured for this environment. Add the required secrets to enable AI responses.",
+            prompt_text=query,
+        )
 
     headers = {
         "Content-Type": "application/json",
@@ -63,15 +80,18 @@ def call_blueverse_agent(raw_query, config, enable_rag=True):
 
     try:
         response = requests.post(
-            config.get("API_URL", ""),
+            api_url,
             headers=headers,
             json=payload,
             timeout=40,
         )
         response.raise_for_status()
-    except (requests.Timeout, requests.HTTPError, requests.ConnectionError) as e:
+    except (requests.Timeout, requests.HTTPError, requests.ConnectionError, requests.RequestException) as e:
         # FULFILL REQUIREMENT 2.4: FALLBACK CHAIN (BlueVerse -> Claude)
         print(f"BlueVerse API Failed: {e}. Falling back to Claude.")
+        return mock_claude_fallback(query)
+    except Exception as e:
+        print(f"Unexpected BlueVerse client error: {e}. Falling back to Claude.")
         return mock_claude_fallback(query)
 
     try:
@@ -87,18 +107,9 @@ def call_blueverse_agent(raw_query, config, enable_rag=True):
             or result.get("output")
             or str(result)
         )
-        # FULFILL REQUIREMENT 2.5: TOKEN USAGE LOGGING
-        # Normally result["usage"]["total_tokens"], but we mock it if missing
-        total_tokens = result.get("usage", {}).get("total_tokens")
-        if not total_tokens:
-            prompt_tokens = len(query.split()) * 1.3
-            completion_tokens = len(response_text.split()) * 1.3
-            total_tokens = int(prompt_tokens + completion_tokens)
-            
-        cost = calculate_cost(total_tokens)
-        return response_text, total_tokens, cost
+        usage = result.get("usage")
+        total_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+        return build_response_triplet(response_text, tokens=total_tokens, prompt_text=query)
 
     # Fallback absolute worst case
-    response_text = str(result)
-    tokens = int((len(query.split()) + len(response_text.split())) * 1.3)
-    return response_text, tokens, calculate_cost(tokens)
+    return build_response_triplet(result, prompt_text=query)
