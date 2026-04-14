@@ -1,145 +1,155 @@
-# Mentor Feedback Prep (April 16 to April 20 Submission)
+# Mentor Feedback Prep (April 16 Mentor Review, April 20 Final Submission)
 
-## Meeting Objective
-Use the mentor session to convert the current strong prototype into a submission that is:
-- technically credible for enterprise adoption,
-- aligned to judging criteria,
-- realistic and honest about current scope vs. next-step roadmap.
+## Why This File Exists
+This is a direct speaking guide for the mentor meeting.  
+Use it as a script so you never get stuck on what to say next.
 
-## How To Run The Mentor Meeting (30-40 minutes)
+## Meeting Goal (Say This First)
+`My goal today is to get focused feedback on three things: enterprise feasibility, scoring impact, and must-fix actions before April 20. I will show what is already live, what is simulated, and what I will complete next.`
 
-### 1. Context (3 minutes)
-- Problem statement: enterprise Oracle pipelines fail due to latency, drift, and operational blind spots.
-- Current solution: control tower + AI remediation + governed action path.
-- Ask mentor to evaluate technical credibility, feasibility, and scoring strength.
+## 40-Minute Mentor Meeting Plan
+1. `3 min` context and objective.
+2. `10 min` live product walkthrough.
+3. `12 min` architecture, code, and token/cost explanation.
+4. `10 min` mentor questions and decision points.
+5. `5 min` action plan confirmation.
 
-### 2. Live Demo (10 minutes)
-- Follow [DEMO_DAY_RUNBOOK.md](./DEMO_DAY_RUNBOOK.md).
-- Keep fallback plan ready:
-  - BlueVerse strict mode first,
-  - fallback mode only if auth fails,
-  - mock mode only if live OCI run list is empty.
+## Verbatim Opening Script (Read This)
+`We built an Oracle-focused control tower for pipeline operations. It tracks pipeline health, latency drift, anomalies, and remediation workflows.`
 
-### 3. Architecture + Code Walkthrough (10-12 minutes)
-- UI orchestration and workflows: `app.py`
-- Live OCI ingestion and action layer: `data_sources.py`
-- AI client behavior and reliability modes: `blueverse.py`
-- Health/risk logic: `analytics.py`
-- Tests: `tests/test_analytics.py`
+`The app has three enterprise goals: reduce triage time, increase remediation consistency, and enable governed actions.`
 
-### 4. Feedback Capture (10-15 minutes)
-- Drive focused discussion with the question bank below.
-- End with explicit decision points and ownership.
+`Today I will show one live OCI vertical end-to-end: Data Flow telemetry ingestion plus approval-gated rerun actions with an audit trail.`
 
-## What To Ask Mentor (High-Value Question Bank)
+`For AI, BlueVerse is the primary mode, and fallback is optional for continuity.`
 
-## A. OCI Data And Access
-1. Which OCI services should be mandatory in the final story: Data Flow only, or Data Flow + Monitoring + Logging?
-2. Can we get a stable demo tenancy/compartment with predictable Data Flow runs for final evaluation?
-3. Are ODI and GoldenGate live APIs expected for scoring, or is a clear extensibility plan acceptable?
-4. What credentials model is preferred for demo: temporary user token vs service principal style access?
-5. Do we need explicit network/security notes for enterprise readiness (private endpoints, IAM policy references)?
+`I want your feedback on production-readiness priorities before final submission on April 20.`
 
-## B. BlueVerse And AI Integration
-1. Should we present strict real-BlueVerse mode as default, with fallback only as controlled continuity mode?
-2. Is token-refresh strategy expected in submission docs, or enough to describe current auth handling and next steps?
-3. Do judges prefer deeper prompt/cost reporting in UI, or current concise token/cost display?
-4. Is lightweight Oracle grounding sufficient, or do we need to prioritize a true RAG implementation before April 20?
+## Demo Script (What To Click + What To Say)
 
-## C. Enterprise Feasibility
-1. Is the current governed action (approval + audit + rerun) strong enough for enterprise story?
-2. What additional control is highest impact before submission:
-   - role-based action guardrails,
-   - stronger action logging,
-   - rollback/verification panel,
-   - deployment hardening notes?
-3. Which risk should we address first to maximize score impact?
+## Step 1: Fleet Overview
+`Here we see centralized pipeline visibility with health scoring and anomaly detection.`
+`In live OCI mode, data is coming from OCI Data Flow runs in the configured compartment.`
 
-## D. Submission Strategy
-1. Which 2-3 strengths should we emphasize most in final narrative?
-2. Which limitations must be explicitly documented to stay credible?
-3. For judging, should we optimize for live-path demonstration or reliable mock-path with stronger explanation?
+## Step 2: AI Auto-Remediation
+`Now I select an affected pipeline and ask BlueVerse for root-cause plus actionable fix code.`
+`The output is intentionally structured into root cause and implementation steps to reduce MTTR.`
 
-## How To Explain Code And Tech Stack To Mentor
+## Step 3: Enterprise Action Control
+`This section enforces operator governance.`
+`I must add a justification and explicitly approve before triggering a live action.`
+`Now I execute a live OCI rerun for the selected Data Flow application.`
 
-## 1. Architecture In One Minute
-- Streamlit control tower orchestrates telemetry, AI, prediction, and actions.
-- Telemetry normalizes into one pipeline schema used across all tabs.
-- AI consumes selected context (pipeline or fleet) for grounded outputs.
-- Action layer executes controlled operations (currently OCI Data Flow rerun) with audit trace.
+## Step 4: Audit Trail
+`Every action is logged with timestamp, pipeline, status, and OCI request metadata.`
+`This gives accountability and operational traceability.`
 
-## 2. File-Level Explanation
+## Step 5: Predictive + Chat
+`This tab ranks risk so we can prioritize intervention.`
+`The support chat uses current telemetry context to answer operations questions quickly.`
+
+## If Live Path Fails (Rescue Lines)
+`BlueVerse auth failed, so I will switch to fallback mode to continue workflow demonstration without blocking the session.`
+
+`Live OCI returned no runs in this compartment, so I will continue in simulator mode to show the complete product flow.`
+
+`The action API call failed, and that failure is still captured in the audit trail, which is expected in governed enterprise operations.`
+
+## Architecture + Code Walkthrough Script
+
+## 1) End-to-End Architecture (30-45 seconds)
+`UI orchestration is in Streamlit. Telemetry is normalized into a single schema. Analytics computes health and risk. BlueVerse generates remediation. Action controls execute governed operations.`
+
+## 2) File-by-File Explanation
 - `app.py`:
-  - UI tabs, sidebar config, session state, and enterprise action controls.
-  - strict BlueVerse mode vs optional fallback mode.
+  - page layout, tabs, control flow, sidebar connection settings, action approvals, and audit display.
+  - strict BlueVerse mode and optional fallback toggle.
 - `data_sources.py`:
-  - mock data model,
-  - live OCI Data Flow run discovery,
-  - pipeline schema mapping,
+  - mock dataset,
+  - live OCI Data Flow run ingestion,
+  - telemetry mapping to unified schema,
   - live rerun API call.
 - `blueverse.py`:
-  - BlueVerse request builder,
-  - payload parsing,
-  - explicit error diagnostics,
-  - optional fallback behavior.
+  - request construction,
+  - response parsing,
+  - strict real-response mode,
+  - optional fallback mode and diagnostics.
 - `analytics.py`:
-  - deterministic health score and risk heuristics for explainability.
+  - deterministic health scoring and risk logic.
 - `tests/test_analytics.py`:
-  - regression tests for scoring and Oracle scenario behavior.
+  - scenario tests for Oracle-shaped failure patterns.
 
-## 3. Tech Stack Summary
-- Frontend + app runtime: `Streamlit`
-- Visualization: `Plotly`, `Pandas`
-- AI integration: `BlueVerse API via requests`
-- Cloud integration: `OCI Python SDK (Data Flow)`
-- Logic/testing: pure Python + `pytest`
+## 3) Tech Stack Script
+`Frontend/runtime is Streamlit, analytics and transformation are Python + Pandas, visualization is Plotly, OCI integration uses OCI Python SDK, and AI integration uses BlueVerse via REST.`
 
-## How To Present Feasibility (Without Overclaiming)
-- Implemented now:
-  - live OCI Data Flow telemetry ingestion,
-  - real BlueVerse integration mode,
-  - governed live rerun action with audit trail.
-- Not fully implemented yet:
-  - live ODI/GoldenGate collectors,
-  - full OCI Monitoring + Logging ingestion pipeline,
-  - production-grade auth/token lifecycle automation.
-- Positioning:
-  - "working enterprise foundation with one live OCI vertical implemented end-to-end, and a clear extension architecture."
+## Token Optimization + Cost Explanation (Say This Exactly)
 
-## Meeting Notes Template
-Use this template during mentor discussion:
+`We expose token and estimated cost for each AI interaction in both remediation and chat.`
 
+`If BlueVerse returns usage metadata, we use provider token count directly.`
+
+`If usage is missing, we compute a deterministic estimate using prompt and response word counts multiplied by 1.3.`
+
+`Cost is then calculated as tokens per 1,000 multiplied by configured rate.`
+
+`Today this is per-request transparency in UI, not persistent cost analytics. Persistent logging is planned as a next increment.`
+
+## Mentor Questions You Must Ask
+
+## OCI Data Scope
+1. `For final scoring, is live Data Flow vertical sufficient, or should I prioritize adding OCI Monitoring/Logging before April 20?`
+2. `Do you expect live ODI/GoldenGate telemetry now, or is documented extensibility enough for this cycle?`
+3. `Can I get a stable demo compartment with known Data Flow runs for final judging?`
+
+## BlueVerse + AI
+1. `Should strict real-BlueVerse mode remain default for demos?`
+2. `How much token/cost evidence do judges expect beyond current UI transparency?`
+3. `Is lightweight Oracle grounding enough, or should I prioritize true RAG before submission?`
+
+## Enterprise Feasibility
+1. `Is approval + justification + audit trail enough to demonstrate governance maturity?`
+2. `Which one improvement has highest scoring impact before April 20?`
+
+## Submission Positioning
+1. `Which top 3 strengths should I emphasize most in final narrative?`
+2. `Which limitations should be explicitly disclosed to stay credible but still competitive?`
+
+## What Not To Claim (Important)
+- Do not claim live ODI and GoldenGate ingestion is fully implemented.
+- Do not claim automatic self-healing across all Oracle services.
+- Do not claim persistent token analytics unless implemented.
+- Do not claim production IAM hardening is complete.
+
+## What You Can Confidently Claim
+- Live OCI Data Flow telemetry ingestion for configured compartment.
+- BlueVerse-driven RCA/fix workflow with strict real-response mode.
+- Optional fallback continuity mode.
+- Governed live rerun action with approval + audit trace.
+- Deterministic risk and health scoring.
+
+## Mentor Notes Template (Fill During Meeting)
 ```text
-Mentor feedback date:
-Top 3 strengths:
-Top 3 risks:
+Mentor review date:
+Top strengths:
+Critical risks:
 Must-fix before Apr 20:
-Nice-to-have if time permits:
-Demo storyline changes:
-Documentation changes:
-Owner / ETA:
+Should-fix before Apr 20:
+Can defer after submission:
+Final demo story changes:
+Documentation updates required:
+Owner and ETA:
 ```
 
-## Execution Plan (Post-Meeting to April 20)
+## Post-Meeting Execution Plan (April 16-20)
+1. Lock final narrative and claims after mentor decisions.
+2. Implement only high-impact must-fix items.
+3. Rehearse primary + fallback flows twice.
+4. Validate BlueVerse token and OCI live path on final environment.
+5. Freeze docs and evidence by April 19 night.
 
-### Day 1 (Immediately after mentor call)
-- Lock final demo storyline.
-- Apply must-fix architecture/code/docs updates only.
-- Update docs with mentor-approved claims and scope boundaries.
-
-### Day 2
-- Full rehearsal of primary and fallback demo paths.
-- Capture final screenshots/evidence for docs.
-- Validate BlueVerse and OCI credentials on final demo environment.
-
-### Day 3 (Submission day)
-- Final sanity test.
-- Final repo/doc check.
-- Submission mail/package dispatch.
-
-## Non-Negotiable Checks Before Final Submission
-1. BlueVerse auth works in strict mode.
-2. At least one live OCI Data Flow pipeline appears in live mode.
-3. Governed rerun action produces request metadata in audit trail.
-4. Docs match actual implemented behavior (no overclaims).
-5. Demo backup path rehearsed once end-to-end.
+## Final Pre-Submission Non-Negotiables
+1. BlueVerse strict mode works with a valid token.
+2. At least one live OCI Data Flow pipeline is visible.
+3. Live rerun returns request metadata in audit trail.
+4. Docs exactly match implemented behavior.
+5. Backup demo path works without internet surprises.

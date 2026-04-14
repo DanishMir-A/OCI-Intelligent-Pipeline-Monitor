@@ -2,27 +2,32 @@
 
 ## Current Constraints
 
-### Live OCI Telemetry
-The application includes a future OCI integration hook, but the current dashboard experience is still driven primarily by mock telemetry rather than live OCI Monitoring data.
+### Live OCI Coverage
+Live ingestion is currently implemented for **OCI Data Flow** run telemetry.  
+Live collectors for ODI, GoldenGate, and broader OCI Monitoring/Logging sources are not yet implemented.
 
-### Token And Cost Logging
-The prototype does not yet persist prompt-token, completion-token, or per-request cost metrics.
+### Token And Cost Persistence
+The app displays per-request token and cost values in the UI, but it does not yet persist token/cost analytics to a long-term store for trend reporting.
 
-### Single LLM Provider
-The current implementation uses BlueVerse as the primary model layer and supports graceful degradation when it is unavailable, but it does not yet switch automatically to a second provider.
+### BlueVerse Authentication Lifecycle
+BlueVerse integration is live, but token refresh lifecycle automation is not yet implemented. Expired tokens still require operator update in secrets.
 
-### Benchmark Automation
-The dashboard is demo-ready, but startup time, response latency, and concurrency observations are not yet captured automatically inside the product.
+### Action Scope
+Governed live action is implemented for OCI Data Flow rerun.  
+Cross-service remediation actions (ODI, GoldenGate, database patch orchestration) are not yet implemented.
 
-### Mock Scenario Dependence
-The anomaly scenarios are realistic and Oracle-shaped, but they are still simulated rather than sourced from a live enterprise estate.
+### Production Hardening
+The prototype is demo-ready, but enterprise deployment hardening is still pending:
+- centralized secrets/IAM policy templates,
+- environment-specific config bundles,
+- formal SLO/SLA monitoring and alert routing.
 
 ### AI Output Variability
-Remediation quality depends on the relevance and precision of BlueVerse responses. Outputs should be treated as engineering guidance rather than production-safe automation without review.
+AI remediation quality depends on prompt context and model behavior. Outputs should still be reviewed by an engineer before production execution.
 
 ## Near-Term Improvement Path
-- implement OCI Monitoring metric mapping
-- add token and cost logging
-- add a policy-approved fallback model layer
-- expand automated test coverage
-- add richer operational export and incident-report workflows
+1. Add OCI Monitoring and OCI Logging collectors to enrich live telemetry.
+2. Add live ODI and GoldenGate telemetry adapters.
+3. Add persisted token/cost telemetry and reporting.
+4. Add policy-controlled action templates for additional Oracle services.
+5. Add deployment hardening artifacts (security notes, runbooks, environment baselines).
