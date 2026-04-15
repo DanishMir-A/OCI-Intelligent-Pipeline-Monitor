@@ -1,0 +1,11 @@
+.git
+.gitignore
+.streamlit/secrets.toml
+.submission_private
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+.pytest_cache

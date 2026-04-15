@@ -1,5 +1,7 @@
 from datetime import datetime
 from statistics import mean
+from pathlib import Path
+import json
 
 import streamlit as st
 
@@ -10,6 +12,7 @@ except ImportError:
 
 
 OCI_REQUIRED_FIELDS = ("tenancy_ocid", "user_ocid", "fingerprint", "region", "key_file")
+MOCK_PIPELINES_FILE = Path(__file__).resolve().parent / "data" / "mock_pipelines.json"
 
 
 def build_oci_config(connection_settings):
@@ -270,148 +273,35 @@ def get_real_oci_telemetry(connection_settings=None):
 def get_oci_mock_pipelines():
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    try:
+        with MOCK_PIPELINES_FILE.open("r", encoding="utf-8") as source_file:
+            loaded = json.load(source_file)
+    except Exception:
+        loaded = []
+
+    prepared = []
+    for record in loaded:
+        pipeline = dict(record)
+        pipeline.setdefault("schema_changes", [])
+        pipeline["last_run"] = pipeline.get("last_run") or timestamp
+        prepared.append(pipeline)
+
+    if prepared:
+        return prepared
+
     return [
         {
-            "pipeline_name": "gg_fin_ledger_sync",
-            "type": "GoldenGate",
-            "source": "E-Business Suite 12.2",
-            "target": "OCI Autonomous Data Warehouse (ADW)",
-            "status": "FAILED",
-            "expected_rows": 850000,
-            "actual_rows": 512000,
-            "duration_minutes": 240,
+            "pipeline_name": "mock_pipeline_fallback",
+            "type": "OCI Data Flow",
+            "source": "Mock Source",
+            "target": "Mock Target",
+            "status": "WARNING",
+            "expected_rows": 100,
+            "actual_rows": 60,
+            "duration_minutes": 15,
             "avg_duration_minutes": 8,
-            "anomaly_detected": "Extract Abend & Giant LAG",
+            "anomaly_detected": "Volume Drop",
             "schema_changes": [],
             "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "odi_sales_crm_daily",
-            "type": "ODI 12c",
-            "source": "Fusion Sales Cloud",
-            "target": "Oracle Retail Data Store",
-            "status": "FAILED",
-            "expected_rows": 45000,
-            "actual_rows": 0,
-            "duration_minutes": 18,
-            "avg_duration_minutes": 15,
-            "anomaly_detected": "Schema Drift & ORA-00904",
-            "schema_changes": [
-                "OPPORTUNITY_ID type changed from NUMBER to VARCHAR2",
-                "AMOUNT_USD column dropped from source layout",
-            ],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "oci_df_clickstream_rt",
-            "type": "OCI Data Flow",
-            "source": "OCI Streaming (Kafka)",
-            "target": "OCI Object Storage",
-            "status": "WARNING",
-            "expected_rows": 5000000,
-            "actual_rows": 1250000,
-            "duration_minutes": 5,
-            "avg_duration_minutes": 5,
-            "anomaly_detected": "Volume Drop (75%)",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "gg_hr_payroll_sync",
-            "type": "GoldenGate",
-            "source": "HCM Cloud",
-            "target": "ADW (Ashburn)",
-            "status": "SUCCESS",
-            "expected_rows": 12500,
-            "actual_rows": 12500,
-            "duration_minutes": 3,
-            "avg_duration_minutes": 3,
-            "anomaly_detected": "None",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "odi_inventory_global",
-            "type": "ODI 12c",
-            "source": "JD Edwards EnterpriseOne",
-            "target": "Oracle SCM Cloud",
-            "status": "WARNING",
-            "expected_rows": 320000,
-            "actual_rows": 319500,
-            "duration_minutes": 78,
-            "avg_duration_minutes": 45,
-            "anomaly_detected": "Latency Spike (Agent Memory Pressure)",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "oci_df_iot_telemetry",
-            "type": "OCI Data Flow",
-            "source": "IoT Fleet Sensors",
-            "target": "Autonomous JSON Database",
-            "status": "FAILED",
-            "expected_rows": 1200000,
-            "actual_rows": 5000,
-            "duration_minutes": 12,
-            "avg_duration_minutes": 12,
-            "anomaly_detected": "Volume Drop & ORA-01438",
-            "schema_changes": ["SENSOR_TEMP precision exceeded column threshold"],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "gg_marketing_campaigns",
-            "type": "GoldenGate",
-            "source": "MySQL HeatWave On-Prem",
-            "target": "OCI MySQL HeatWave",
-            "status": "WARNING",
-            "expected_rows": 85000,
-            "actual_rows": 85000,
-            "duration_minutes": 45,
-            "avg_duration_minutes": 12,
-            "anomaly_detected": "Replicat Checkpoint Lag Spike",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "odi_customer_mdm",
-            "type": "ODI 12c",
-            "source": "Siebel CRM",
-            "target": "Oracle CX Cloud",
-            "status": "SUCCESS",
-            "expected_rows": 9800,
-            "actual_rows": 9800,
-            "duration_minutes": 14,
-            "avg_duration_minutes": 12,
-            "anomaly_detected": "None",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "epm_financial_consolidation",
-            "type": "EPM Automate",
-            "source": "Oracle ERP Cloud",
-            "target": "EPM Cloud (PBCS)",
-            "status": "FAILED",
-            "expected_rows": 15000,
-            "actual_rows": 0,
-            "duration_minutes": 35,
-            "avg_duration_minutes": 5,
-            "anomaly_detected": "Authentication Timeout & Zero Load",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
-        {
-            "pipeline_name": "oci_di_logistics",
-            "type": "OCI Data Integration",
-            "source": "Oracle Transportation Mgmt",
-            "target": "MySQL HeatWave",
-            "status": "WARNING",
-            "expected_rows": 24000,
-            "actual_rows": 24000,
-            "duration_minutes": 26,
-            "avg_duration_minutes": 10,
-            "anomaly_detected": "Latency Spike (DI Workspace Scale Limit)",
-            "schema_changes": [],
-            "last_run": timestamp,
-        },
+        }
     ]

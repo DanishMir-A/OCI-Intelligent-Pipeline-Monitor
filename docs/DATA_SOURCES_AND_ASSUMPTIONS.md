@@ -3,7 +3,7 @@
 ## Data Sources
 
 ### Mock Telemetry
-The current prototype is driven primarily by `get_oci_mock_pipelines()` in `data_sources.py`. Each record includes:
+The current prototype includes a curated mock dataset in `data/mock_pipelines.json`, loaded by `get_oci_mock_pipelines()` in `data_sources.py`. Each record includes:
 - pipeline name
 - integration type
 - source and target systems
